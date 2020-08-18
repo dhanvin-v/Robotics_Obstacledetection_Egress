@@ -1,0 +1,276 @@
+#include "Robot_QTR_Sensor.h"
+#include "Romi_Motor_Power.h"
+#include "Robot_Pins_v2.h"
+#include "Energia.h"
+#define LS_TIMEOUT 2500
+#define LED RED_LED
+
+
+Romi_Motor_Power left_motor;
+Romi_Motor_Power right_motor;
+const int trigPin = 32;           //connects to the trigger pin on the distance sensor      
+const int echoPin = 33;           //connects to the echo pin on the distance sensor      
+int distance = 0;               //stores the distance measured by the distance sensor
+int flag=0;
+
+
+void setup()
+{  
+  pinMode(trigPin, OUTPUT);   //the trigger pin will output pulses of electricity
+  pinMode(echoPin, INPUT);    //the echo pin will measure the duration of pulses coming back from the distance sensor
+
+  /* Initialize both motors */
+  left_motor.begin(MOTOR_L_SLP_PIN,
+           MOTOR_L_DIR_PIN,
+           MOTOR_L_PWM_PIN);
+  right_motor.begin(MOTOR_R_SLP_PIN,
+            MOTOR_R_DIR_PIN,
+            MOTOR_R_PWM_PIN);
+ 
+  /* Initialize line sensor */
+  qtr8_sensor_init(LS_PIN_1,
+           LS_PIN_2,
+           LS_PIN_3,
+           LS_PIN_4,
+           LS_PIN_5,
+           LS_PIN_6,
+           LS_PIN_7,
+           LS_PIN_8,
+           LS_TIMEOUT,
+           LS_PIN_IR);
+
+  /* Right button on Launchpad */
+  pinMode(PUSH2, INPUT_PULLUP);
+  // initialize the digital pin as an output.
+  pinMode(LED, OUTPUT);     
+
+}
+
+float getDistance()
+{
+  float echoTime;                   //variable to store the time it takes for a ping to bounce off an object
+  float calculatedDistance;         //variable to store the distance calculated from the echo time
+
+  //send out an ultrasonic pulse that's 10ms long
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  echoTime = pulseIn(echoPin, HIGH);      //use the pulsein command to see how long it takes for the
+                                          //pulse to bounce back to the sensor
+
+  calculatedDistance = (echoTime*.0343)/2;  //calculate the distance of the object that reflected the pulse (half the bounce time multiplied by the speed of sound)
+
+  return calculatedDistance;              //send back the distance that was calculated
+}
+
+
+//Function used to check if obstacle is present in the fastest path to go out
+void    move_forward_obstacle()
+{
+
+  int left_motor_speed = 0;
+  int right_motor_speed = 0;
+  
+  left_motor.directionForward();
+  right_motor.directionForward();
+  left_motor.setSpeed(30);
+  right_motor.setSpeed(30);
+  delay(1000);
+
+  distance = getDistance();   //variable to store the distance measured by the sensor
+  if((distance !=0) && (distance < 2))
+  {
+       left_motor.directionForward();
+       left_motor.setSpeed(27);
+       right_motor.directionBackward();
+       right_motor.setSpeed(26.5);
+       delay(101);
+
+       left_motor_speed  = 0;
+       right_motor_speed = 0;
+       left_motor.setSpeedRaw(left_motor_speed);
+       right_motor.setSpeedRaw(right_motor_speed);
+       
+       delay(900);                
+
+ }
+  left_motor.directionForward();
+  right_motor.directionForward();
+  left_motor.setSpeed(30);
+  right_motor.setSpeed(30);
+  delay(2000);
+
+
+
+}
+
+
+void loop()
+{
+
+  uint8_t     line_loc, default_motor_speed;
+  uint16_t    left_motor_speed, right_motor_speed;
+
+  /* Wait until button is pressed to start robot */
+  while(digitalRead(PUSH2));
+
+  // Be default the motors are disabled so turn them on
+  left_motor.enableMotor();
+  right_motor.enableMotor();
+  int i = 0, max = 0, min = 100, min_count = 0, max_count = 0, path_count = 0;
+  
+  while(i < 24) {
+   distance = getDistance();   //variable to store the distance measured by the sensor
+
+    //checking the distance of the obstacle is not junk value
+   if(distance != 0)
+        { 
+           //Finding the path with max distance
+           if(distance > max)
+              {
+                max = distance;
+                max_count = i;
+              }
+
+           //Finding the path with least distance
+           if(distance < min)
+              {    
+                min = distance;
+                min_count = i;
+              }
+        }
+
+       i++;
+
+       //Making the bot move 15 degrees
+       left_motor.directionForward();
+       left_motor.setSpeed(27);
+       right_motor.directionBackward();
+       right_motor.setSpeed(26.5);
+
+       delay(101);
+
+       //Making the bot stop after moving 15 degree
+       left_motor_speed  = 0;
+       right_motor_speed = 0;
+       left_motor.setSpeedRaw(left_motor_speed);
+       right_motor.setSpeedRaw(right_motor_speed);
+       
+       delay(900);                
+
+    }
+
+   left_motor.setSpeed(0);  
+   right_motor.setSpeed(0);  
+   delay(1500);  
+   i = 0;
+
+   //Making the bot stop before the obstacle
+   while(i < min_count) {
+
+    i++;
+       left_motor.directionForward();
+       left_motor.setSpeed(27);
+       right_motor.directionBackward();
+        right_motor.setSpeed(26.5);
+
+       delay(101);
+
+       left_motor_speed  = 0;
+       right_motor_speed = 0;
+       left_motor.setSpeedRaw(left_motor_speed);
+       right_motor.setSpeedRaw(right_motor_speed);
+       
+       delay(450);                
+   }
+
+   //making the LED blink after it stops before the obstacle
+   digitalWrite(LED, HIGH);   // turn the LED on (HIGH is the voltage level)
+   delay(1000);               // wait for a second
+   digitalWrite(LED, LOW);    // turn the LED off by making the voltage LOW
+   delay(1000);               // wait for a second
+
+  //Finding the fastest way out
+  if(min_count < max_count)
+  {
+      if((max_count - min_count)<12){
+
+      //Clockwise movement
+      while(i < min_count) {
+
+       i++;
+       left_motor.directionForward();
+       left_motor.setSpeed(27);
+       right_motor.directionBackward();
+       right_motor.setSpeed(26.5);
+
+       delay(101);
+      }
+
+       //moves forward and checks for obstacle
+       move_forward_obstacle();
+     }
+
+     else {
+
+    //Counter Clockwise movement
+    while( i < (max_count - min_count)) {
+       i++;
+       right_motor.directionForward();
+       right_motor.setSpeed(27);
+       left_motor.directionBackward();
+       left_motor.setSpeed(26.5);
+
+       delay(101);
+     }
+
+       //moves forward and checks for obstacle
+       move_forward_obstacle();
+    }
+  }
+
+  else {
+      if((min_count - max_count)<12){
+
+      //Clockwise movement
+      while(i < min_count) {
+
+       i++;
+       left_motor.directionForward();
+       left_motor.setSpeed(27);
+       right_motor.directionBackward();
+       right_motor.setSpeed(26.5);
+
+       delay(101);
+      }
+
+       //moves forward and checks for obstacle
+       move_forward_obstacle();
+     }
+
+     else {
+
+    //Counter Clockwise movement
+    while( i < (max_count - min_count)) {
+       i++;
+       right_motor.directionForward();
+       right_motor.setSpeed(27);
+       left_motor.directionBackward();
+       left_motor.setSpeed(26.5);
+
+       delay(101);
+     }
+
+       //moves forward and checks for obstacle
+       move_forward_obstacle();
+    }
+
+ }
+
+ //Given a delay for the loop to startover again 
+  delay(8000);
+
+}
+
+
